@@ -95,7 +95,7 @@ public class Knobs
     }
 
 
-    private static void readFromServer()
+    static void readFromServer()
     {
         byte[] sockBuffer = new byte[size];
 
