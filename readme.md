@@ -55,3 +55,7 @@ Only useful for quickly verifying that the server's working. It just blocks on s
 #TODO
 Will probably find a way to wrap the server in a WebSocket proxy and make a Javascript client next time I end up in Three.js land.
 There are definitely some rough edges right now; I've mostly been adding features as I need them. Feel free to contribute.
+
+
+##Contact
+[Go yell at me on twitter](https://twitter.com/AmazingThew)
