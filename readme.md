@@ -15,15 +15,15 @@ Thus, KNOB SOCK: Knobular data supplied via socket server. Socket functionality 
 
 
 #INSTALLATION
-Install Python. I have only tested on 3.5 under Windows.
-Run `pip install mido`
-Run `pip install python-rtmidi`
-Download the project files bc you'll probably need those I guess
-Plug in one or more MIDI controllers with some knobs (tested: Akai LPD8 and Korg nanoKONTROL2)
-Run configurator.py. It will ask you to fondle all your knobs so the server can identify them
-Run server.py
-Open Clients/Python/debugClient.py and change NUM_KNOBS to the total number of knobs you configured
-Run debugClient.py. It should print values to the console when the knobs are moved.
+* Install Python. I have only tested on 3.5 under Windows.
+* Run `pip install mido`
+* Run `pip install python-rtmidi`
+* Download the project files bc you'll probably need those I guess
+* Plug in one or more MIDI controllers with some knobs (tested: Akai LPD8 and Korg nanoKONTROL2)
+* Run configurator.py. It will ask you to fondle all your knobs so the server can identify them
+* Run server.py
+* Open Clients/Python/debugClient.py and change NUM_KNOBS to the total number of knobs you configured
+* Run debugClient.py. It should print values to the console when the knobs are moved.
 
 
 #USAGE NOTES
