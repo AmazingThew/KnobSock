@@ -90,8 +90,11 @@ class MidiServer(asyncore.dispatcher):
 
 
     def onMessage(self, controllerNumber, message):
-        self.knobs[self.knobMap[self.knobOffsets[controllerNumber] + message.control]] = message.value
-        self.push()
+        if message.type == 'control_change':
+            self.knobs[self.knobMap[self.knobOffsets[controllerNumber] + message.control]] = message.value
+            self.push()
+        else:
+            self.printKnobs()
 
 
     def printKnobs(self):
