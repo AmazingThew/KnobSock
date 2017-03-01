@@ -55,9 +55,10 @@ class MidiServer(asyncore.dispatcher):
 
         mido.set_backend('mido.backends.rtmidi')
         loop = asyncio.get_event_loop()
-        loop.call_soon(self.awaitDevices, loop)
-        loop.run_forever()
-        loop.close()
+        self.awaitDevices(loop)
+        # loop.call_soon(self.awaitDevices, loop)
+        # loop.run_forever()
+        # loop.close()
 
 
     def awaitDevices(self, loop):
