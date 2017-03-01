@@ -1,4 +1,4 @@
-import asyncore, asynchat, socket
+import asyncio, asyncore, asynchat, socket
 import os
 import sys
 import mido
@@ -27,6 +27,8 @@ class MidiServer(asyncore.dispatcher):
         self.totalKnobs = sum((device['numKnobs'] for device in self.deviceInfo.values()))
         self.knobMap = []
         self.knobOffsets = [0]
+        self.connectedDevices = []
+        self.prevControllerNames = []
         self.knobs = bytearray([0] * self.totalKnobs)
 
         try:
@@ -45,33 +47,54 @@ class MidiServer(asyncore.dispatcher):
             print(e, file=sys.stderr)
             print('\n\nFailed to load preexisting knob values from disk; values will read 0 until knobs are moved', file=sys.stderr)
 
+        print('Starting socket server')
+        asyncore.dispatcher.__init__(self)
+        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.bind((hostname, port))
+        self.listen(5)
+
         mido.set_backend('mido.backends.rtmidi')
+        loop = asyncio.get_event_loop()
+        loop.call_soon(self.awaitDevices, loop)
+        loop.run_forever()
+        loop.close()
+
+
+    def awaitDevices(self, loop):
         controllerNames = mido.get_input_names()
+        if controllerNames != self.prevControllerNames:
+            self.connectDevices(controllerNames)
+        self.prevControllerNames = controllerNames
 
-        if not controllerNames: return
+        loop.call_later(5, self.awaitDevices, loop)
 
+
+    def connectDevices(self, controllerNames):
+        [port.close() for port in self.connectedDevices]
+        self.knobMap = []
+        self.knobOffsets = [0]
+        self.connectedDevices = []
+
+        skipped = 0
         runningOffset = 0
         for (i, name) in enumerate(controllerNames):
+            index = i - skipped
             cleanName = name[:name.rfind(' ')]
             if cleanName not in self.deviceInfo.keys():
                 print("No configuration found for {}; skipping...".format(cleanName))
+                skipped += 1
                 continue
 
             try:
                 print("Connecting to " + cleanName)
-                mido.open_input(name, callback=lambda m, cn=i: self.onMessage(cn, m))
+                port = mido.open_input(name, callback=lambda m, cn=index: self.onMessage(cn, m))
+                self.connectedDevices.append(port)
                 self.knobMap.extend(
                     (None if x is None else x + runningOffset for x in self.deviceInfo[cleanName]['knobMap']))
                 self.knobOffsets.append(len(self.deviceInfo[cleanName]['knobMap']))
                 runningOffset += self.deviceInfo[cleanName]['numKnobs']
             except Exception as e:
                 print('Unable to open MIDI input: {}'.format(name), file=sys.stderr)
-
-        print('Starting socket server')
-        asyncore.dispatcher.__init__(self)
-        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.bind((hostname, port))
-        self.listen(5)
 
 
     def handle_accepted(self, sock, address):
@@ -93,7 +116,7 @@ class MidiServer(asyncore.dispatcher):
         if message.type == 'control_change':
             self.knobs[self.knobMap[self.knobOffsets[controllerNumber] + message.control]] = message.value
             self.push()
-        else:
+        elif message.type == 'note_on':
             self.printKnobs()
 
 
