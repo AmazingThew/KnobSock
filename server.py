@@ -26,6 +26,7 @@ class MidiServer(asyncore.dispatcher):
         self.subSockets = []
         self.totalKnobs = sum((device['numKnobs'] for device in self.deviceInfo.values()))
         self.knobMap = []
+        self.knobInfo = []
         self.knobOffsets = [0]
         self.connectedDevices = []
         self.prevControllerNames = []
@@ -65,6 +66,7 @@ class MidiServer(asyncore.dispatcher):
         controllerNames = mido.get_input_names()
         if controllerNames != self.prevControllerNames:
             self.connectDevices(controllerNames)
+            self.rectifyDeviceState()
         self.prevControllerNames = controllerNames
 
         loop.call_later(5, self.awaitDevices, loop)
@@ -87,15 +89,41 @@ class MidiServer(asyncore.dispatcher):
                 continue
 
             try:
-                print("Connecting to " + cleanName)
                 port = mido.open_input(name, callback=lambda m, cn=index: self.onMessage(cn, m))
                 self.connectedDevices.append(port)
                 self.knobMap.extend(
                     (None if x is None else x + runningOffset for x in self.deviceInfo[cleanName]['knobMap']))
+
+                for perDeviceKnobIndex, (mappedKnobIndex, knobChannel) in enumerate(zip(self.deviceInfo[cleanName]['knobMap'], self.deviceInfo[cleanName]['channelMap'])):
+                    if mappedKnobIndex is not None:
+                        multiDeviceIndex = mappedKnobIndex + runningOffset
+                        self.knobInfo.append((cleanName, multiDeviceIndex, perDeviceKnobIndex, knobChannel))
+
                 self.knobOffsets.append(len(self.deviceInfo[cleanName]['knobMap']))
                 runningOffset += self.deviceInfo[cleanName]['numKnobs']
+                print("Connected to " + cleanName)
             except Exception as e:
-                print('Unable to open MIDI input: {}'.format(name), file=sys.stderr)
+                print('Unable to open MIDI input: {}\n{}'.format(name, e), file=sys.stderr)
+
+    def rectifyDeviceState(self):
+        outputPorts = {}
+        controllerNames = mido.get_output_names()
+        for name in controllerNames:
+            cleanName = name[:name.rfind(' ')]
+            if cleanName not in self.deviceInfo.keys():
+                continue
+
+            try:
+                outputPorts[cleanName] = mido.open_output(name)
+            except Exception as e:
+                print('Unable to open MIDI output: {}\n{}'.format(name, e), file=sys.stderr)
+
+        for deviceName, multiDeviceIndex, perDeviceKnobIndex, knobChannel in self.knobInfo:
+            message = mido.Message('control_change', channel=knobChannel, control=perDeviceKnobIndex, value=self.knobs[multiDeviceIndex])
+            outputPorts[deviceName].send(message)
+
+        for port in outputPorts.values():
+            port.close
 
 
     def handle_accepted(self, sock, address):
@@ -118,8 +146,11 @@ class MidiServer(asyncore.dispatcher):
             self.knobs[self.knobMap[self.knobOffsets[controllerNumber] + message.control]] = message.value
             self.push()
         elif message.type == 'note_on':
-            self.printKnobs()
+            self.onButton()
 
+    def onButton(self):
+        self.saveKnobs()
+        self.rectifyDeviceState()
 
     def printKnobs(self):
         print('\n'.join("{}:\t{}".format(i, float(b) / 127.0) for i, b in enumerate(self.knobs)) + '\n')

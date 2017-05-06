@@ -55,11 +55,12 @@ class Configurator:
             self.lastMessage = None
             self.currMessage = None
             knobMap = SparseList()
+            channelMap = SparseList()
             print("Turn all knobs in the order you want them mapped")
 
             while mappedKnobs < expectedKnobs:
                 if self.currMessage != self.lastMessage:
-                    name, knob = self.currMessage
+                    name, knob, channel = self.currMessage
 
                     if mappedKnobs == 0:
                         currentDevice = name
@@ -70,13 +71,15 @@ class Configurator:
                         if knobMap[knob] is not None:
                             continue
 
-                    print("{0} knob {1} mapped to index {2}".format(name, knob, mappedKnobs))
+                    print("{0} - knob {1}, channel {2} mapped to index {3}".format(name, knob, channel, mappedKnobs))
                     knobMap[knob] = mappedKnobs
+                    channelMap[knob] = channel
                     mappedKnobs += 1
 
                     self.lastMessage = self.currMessage
 
             self.deviceInfo[currentDevice]['knobMap'] = list(knobMap)
+            self.deviceInfo[currentDevice]['channelMap'] = list(channelMap)
 
 
     def save(self):
@@ -87,7 +90,7 @@ class Configurator:
 
     def onMessage(self, name, message):
         if message.type == 'control_change':
-            self.currMessage = (name, message.control)
+            self.currMessage = (name, message.control, message.channel)
 
 
 
