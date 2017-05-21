@@ -1,4 +1,4 @@
-import asyncio, asyncore, asynchat, socket
+import asyncio
 import os
 import sys
 import mido
@@ -6,10 +6,11 @@ import pickle
 import hashlib
 
 
-class MidiServer(asyncore.dispatcher):
+class MidiServer(object):
 
     knobStateFilename = 'knobState'
     knobConfigFilename = 'knobConfig'
+
 
     def __init__(self, hostname, port):
         try:
@@ -23,7 +24,7 @@ class MidiServer(asyncore.dispatcher):
             print('\n\nConfig file is missing or unparsable. Please run configurator.py to generate it', file=sys.stderr)
             sys.exit(-1)
 
-        self.subSockets = []
+        self.clientConnections = []
         self.totalKnobs = sum((device['numKnobs'] for device in self.deviceInfo.values()))
         self.knobMap = []
         self.knobInfo = []
@@ -48,23 +49,29 @@ class MidiServer(asyncore.dispatcher):
             print(e, file=sys.stderr)
             print('\n\nFailed to load preexisting knob values from disk; values will read 0 until knobs are moved', file=sys.stderr)
 
-        print('Starting socket server')
-        asyncore.dispatcher.__init__(self)
-        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.bind((hostname, port))
-        self.listen(5)
-
         mido.set_backend('mido.backends.rtmidi')
+
         loop = asyncio.get_event_loop()
-        self.awaitDevices(loop)
-        # loop.call_soon(self.awaitDevices, loop)
-        # loop.run_forever()
-        # loop.close()
+        factory = loop.create_server(lambda: MidiProtocol(self), hostname, port)
+        server = loop.run_until_complete(factory)
+        print('Starting server on port {}'.format(port))
+
+        loop.call_soon(self.awaitDevices, loop)
+
+        try:
+            loop.run_forever()
+        finally:
+            print('Shutting down server')
+            server.close()
+            loop.run_until_complete(server.wait_closed())
+            print('Closing event loop')
+            loop.close()
 
 
     def awaitDevices(self, loop):
         controllerNames = mido.get_input_names()
         if controllerNames != self.prevControllerNames:
+            print('\nConnecting devices:')
             self.connectDevices(controllerNames)
             self.rectifyDeviceState()
         self.prevControllerNames = controllerNames
@@ -105,6 +112,7 @@ class MidiServer(asyncore.dispatcher):
             except Exception as e:
                 print('Unable to open MIDI input: {}\n{}'.format(name, e), file=sys.stderr)
 
+
     def rectifyDeviceState(self):
         outputPorts = {}
         controllerNames = mido.get_output_names()
@@ -119,26 +127,25 @@ class MidiServer(asyncore.dispatcher):
                 print('Unable to open MIDI output: {}\n{}'.format(name, e), file=sys.stderr)
 
         for deviceName, multiDeviceIndex, perDeviceKnobIndex, knobChannel in self.knobInfo:
-            message = mido.Message('control_change', channel=knobChannel, control=perDeviceKnobIndex, value=self.knobs[multiDeviceIndex])
-            outputPorts[deviceName].send(message)
+            if deviceName in outputPorts.keys():
+                message = mido.Message('control_change', channel=knobChannel, control=perDeviceKnobIndex, value=self.knobs[multiDeviceIndex])
+                outputPorts[deviceName].send(message)
 
         for port in outputPorts.values():
             port.close
 
 
-    def handle_accepted(self, sock, address):
-        print('Accepted connection from {}'.format(address))
-        self.subSockets.append(SubSocket(sock, self, self.totalKnobs))
-        self.push()
+    def register(self, connection):
+        self.clientConnections.append(connection)
 
 
-    def unregister(self, subSocket):
-        self.subSockets.remove(subSocket)
+    def unregister(self, connection):
+        self.clientConnections.remove(connection)
         self.saveKnobs()
 
 
     def push(self):
-        [sock.push(self.knobs) for sock in self.subSockets]
+        [client.push(self.knobs) for client in self.clientConnections]
 
 
     def onMessage(self, controllerNumber, message):
@@ -148,9 +155,11 @@ class MidiServer(asyncore.dispatcher):
         elif message.type == 'note_on':
             self.onButton()
 
+
     def onButton(self):
         self.saveKnobs()
         self.rectifyDeviceState()
+
 
     def printKnobs(self):
         print('\n'.join("{}:\t{}".format(i, float(b) / 127.0) for i, b in enumerate(self.knobs)) + '\n')
@@ -168,25 +177,38 @@ class MidiServer(asyncore.dispatcher):
 
 
 
+class MidiProtocol(asyncio.Protocol):
+    def __init__(self, midi):
+        self.midi = midi
 
-class SubSocket(asynchat.async_chat):
-    def __init__(self, sock, midiServer, bufferSize):
-        print('Starting subsocket')
-        asynchat.async_chat.__init__(self, sock)
-        self.midiServer = midiServer
-        self.ac_out_buffer_size = bufferSize
+    def push(self, data):
+        self.transport.write(data)
 
-    def collect_incoming_data(self, data):
+    def connection_made(self, transport):
+        self.transport = transport
+        self.address = transport.get_extra_info('peername')
+        print('Connection accepted from {}'.format(self.address))
+        self.transport.set_write_buffer_limits(self.midi.totalKnobs, self.midi.totalKnobs)
+        self.midi.register(self)
+
+    def data_received(self, data):
+        print('recieved from {}: {}'.format(self.address, data))
+
+    def eof_received(self):
         pass
-    def found_terminator(self):
-        pass
-    def handle_close(self):
-        print('Disconnecting')
-        self.midiServer.unregister(self)
-        self.close()
+
+    def connection_lost(self, error):
+        if error:
+            if error.errno == 10054:
+                print('Connection to {} force-closed by client'.format(self.address))
+            else:
+                print('Error from {}: {}'.format(self.address, error))
+        else:
+            print('Closing connection to {}'.format(self.address))
+        self.midi.unregister(self)
+        super().connection_lost(error)
 
 
 
 if __name__ == '__main__':
     MidiServer('localhost', 8008)
-    asyncore.loop()
