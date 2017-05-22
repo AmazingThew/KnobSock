@@ -4,6 +4,7 @@ import sys
 import mido
 import pickle
 import hashlib
+from animator import MidiFighterAnimator
 
 
 class MidiServer(object):
@@ -56,6 +57,8 @@ class MidiServer(object):
         server = loop.run_until_complete(factory)
         print('Starting server on port {}'.format(port))
 
+        self.animator = MidiFighterAnimator(loop)
+
         loop.call_soon(self.awaitDevices, loop)
 
         try:
@@ -74,6 +77,7 @@ class MidiServer(object):
             print('\nConnecting devices:')
             self.connectDevices(controllerNames)
             self.rectifyDeviceState()
+            self.animate()
         self.prevControllerNames = controllerNames
 
         loop.call_later(5, self.awaitDevices, loop)
@@ -133,6 +137,15 @@ class MidiServer(object):
 
         for port in outputPorts.values():
             port.close
+
+
+    def animate(self):
+        controllerNames = mido.get_output_names()
+        for name in controllerNames:
+            if 'Midi Fighter Twister' in name:
+                port = mido.open_output(name)
+                self.animator.setDevice(port)
+                break
 
 
     def register(self, connection):
