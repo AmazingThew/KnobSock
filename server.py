@@ -4,6 +4,7 @@ import sys
 import mido
 import pickle
 import hashlib
+from itertools import zip_longest
 from animator import MidiFighterAnimator
 
 
@@ -171,11 +172,20 @@ class MidiServer(object):
 
     def onButton(self):
         self.saveKnobs()
-        self.rectifyDeviceState()
+        # self.rectifyDeviceState() #TODO REENABLE AND FIX
 
 
     def printKnobs(self):
-        print('\n'.join("{}:\t{}".format(i, float(b) / 127.0) for i, b in enumerate(self.knobs)) + '\n')
+        def chunks(iterable, chunkSize, fillvalue=None):
+            args = [iter(iterable)] * chunkSize
+            return zip_longest(*args, fillvalue=fillvalue)
+
+        knobStrings = ["{}:\t{:10.8f}".format(i, float(b) / 127.0) for i, b in enumerate(self.knobs)]
+        columnHeight = 16
+        columns = chunks(knobStrings, columnHeight, "")
+        rows = zip(*columns)
+        print('\n'.join('\t'.join(row) for row in rows) + '\n')
+        # print('\n'.join(knobStrings) + '\n')
 
 
     def saveKnobs(self):
