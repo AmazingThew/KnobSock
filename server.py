@@ -13,7 +13,6 @@ class MidiServer(object):
     knobStateFilename = 'knobState'
     knobConfigFilename = 'knobConfig'
 
-
     def __init__(self, hostname, port):
         try:
             # Load device config
@@ -31,7 +30,7 @@ class MidiServer(object):
         self.knobMap = []
         self.knobInfo = []
         self.knobOffsets = [0]
-        self.connectedDevices = []
+        self.connectedDevices = {}
         self.prevControllerNames = []
         self.knobs = bytearray([0] * self.totalKnobs)
 
@@ -76,7 +75,7 @@ class MidiServer(object):
         controllerNames = mido.get_input_names()
         if controllerNames != self.prevControllerNames:
             print('\nConnecting devices:')
-            self.connectDevices(controllerNames)
+            self.connectDevices()
             self.rectifyDeviceState()
             self.animate()
         self.prevControllerNames = controllerNames
@@ -84,68 +83,72 @@ class MidiServer(object):
         loop.call_later(5, self.awaitDevices, loop)
 
 
-    def connectDevices(self, controllerNames):
-        [port.close() for port in self.connectedDevices]
+    def connectDevices(self):
+        for existingInport, existingOutport in self.connectedDevices.values():
+            existingInport.close()
+            if existingOutport:
+                existingOutport.close()
+
         self.knobMap = []
         self.knobOffsets = [0]
-        self.connectedDevices = []
+        self.connectedDevices = {}
+
+        deviceNames = self.getDeviceNames()
 
         skipped = 0
         runningOffset = 0
-        for (i, name) in enumerate(controllerNames):
+        for (i, (cleanName, inputName, outputName)) in enumerate(deviceNames):
             index = i - skipped
-            cleanName = name[:name.rfind(' ')]
             if cleanName not in self.deviceInfo.keys():
                 print("No configuration found for {}; skipping...".format(cleanName))
                 skipped += 1
                 continue
 
             try:
-                port = mido.open_input(name, callback=lambda m, cn=index: self.onMessage(cn, m))
-                self.connectedDevices.append(port)
-                self.knobMap.extend(
-                    (None if x is None else x + runningOffset for x in self.deviceInfo[cleanName]['knobMap']))
-
-                for perDeviceKnobIndex, (mappedKnobIndex, knobChannel) in enumerate(zip(self.deviceInfo[cleanName]['knobMap'], self.deviceInfo[cleanName]['channelMap'])):
-                    if mappedKnobIndex is not None:
-                        multiDeviceIndex = mappedKnobIndex + runningOffset
-                        self.knobInfo.append((cleanName, multiDeviceIndex, perDeviceKnobIndex, knobChannel))
-
-                self.knobOffsets.append(len(self.deviceInfo[cleanName]['knobMap']))
-                runningOffset += self.deviceInfo[cleanName]['numKnobs']
-                print("Connected to " + cleanName)
+                inport = mido.open_input(inputName, callback=lambda m, cn=index: self.onMessage(cn, m))
+                outport = mido.open_output(outputName) if outputName else None
             except Exception as e:
-                print('Unable to open MIDI input: {}\n{}'.format(name, e), file=sys.stderr)
+                print('Unable to open MIDI connection to {}\n{}'.format(cleanName, e), file=sys.stderr)
+                skipped += 1
+                continue
+
+            self.connectedDevices[cleanName] = (inport, outport)
+            self.knobMap.extend(
+                (None if x is None else x + runningOffset for x in self.deviceInfo[cleanName]['knobMap']))
+
+            for perDeviceKnobIndex, (mappedKnobIndex, knobChannel) in enumerate(zip(self.deviceInfo[cleanName]['knobMap'], self.deviceInfo[cleanName]['channelMap'])):
+                if mappedKnobIndex is not None:
+                    multiDeviceIndex = mappedKnobIndex + runningOffset
+                    self.knobInfo.append((cleanName, multiDeviceIndex, perDeviceKnobIndex, knobChannel))
+
+            self.knobOffsets.append(len(self.deviceInfo[cleanName]['knobMap']))
+            runningOffset += self.deviceInfo[cleanName]['numKnobs']
+            print("Connected to " + cleanName)
+
+
+    def getDeviceNames(self):
+        inputNames = mido.get_input_names()
+        outputNames = mido.get_output_names()
+        deviceNames = []
+        for inputName in inputNames:
+            cleanName = inputName[:inputName.rfind(' ')]
+            outputName = next((oName for oName in outputNames if oName.startswith(cleanName)), None)
+            deviceNames.append((cleanName, inputName, outputName))
+        return deviceNames
 
 
     def rectifyDeviceState(self):
-        outputPorts = {}
-        controllerNames = mido.get_output_names()
-        for name in controllerNames:
-            cleanName = name[:name.rfind(' ')]
-            if cleanName not in self.deviceInfo.keys():
-                continue
-
-            try:
-                outputPorts[cleanName] = mido.open_output(name)
-            except Exception as e:
-                print('Unable to open MIDI output: {}\n{}'.format(name, e), file=sys.stderr)
-
         for deviceName, multiDeviceIndex, perDeviceKnobIndex, knobChannel in self.knobInfo:
-            if deviceName in outputPorts.keys():
+            inport, outport = self.connectedDevices.get(deviceName, (None, None))
+            if outport:
                 message = mido.Message('control_change', channel=knobChannel, control=perDeviceKnobIndex, value=self.knobs[multiDeviceIndex])
-                outputPorts[deviceName].send(message)
-
-        for port in outputPorts.values():
-            port.close
+                outport.send(message)
 
 
     def animate(self):
-        controllerNames = mido.get_output_names()
-        for name in controllerNames:
-            if 'Midi Fighter Twister' in name:
-                port = mido.open_output(name)
-                self.animator.setDevice(port)
+        for name, (inport, outport) in self.connectedDevices.items():
+            if name == 'Midi Fighter Twister':
+                self.animator.start(outport)
                 break
 
 
@@ -172,7 +175,7 @@ class MidiServer(object):
 
     def onButton(self):
         self.saveKnobs()
-        # self.rectifyDeviceState() #TODO REENABLE AND FIX
+        self.rectifyDeviceState()
 
 
     def printKnobs(self):

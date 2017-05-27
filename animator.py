@@ -34,29 +34,33 @@ class MidiFighterAnimator(object):
     def __init__(self, eventLoop):
         self.loop = eventLoop
         self.progress = 0
-        self.shouldRun = True
         self.loop.create_task(self.animate())
 
-    def setDevice(self, midiPort):
+
+    def start(self, midiPort):
         self.port = midiPort
+        self.shouldRun = True
+
 
     def stop(self):
         self.shouldRun = False
 
+
     async def animate(self):
-        while self.shouldRun:
+        while True:
             self._rainbow()
             await asyncio.sleep(self.tickRate)
-        for i in range(16):
-            self.resetKnobColor(i)
+
 
     def setKnobColor(self, index, color):
         message = mido.Message('control_change', channel=1, control=index, value=color)
         self._send(message)
 
+
     def resetKnobColor(self, index):
         message = mido.Message('control_change', channel=1, control=index, value=0)
         self._send(message)
+
 
     def _rainbow(self):
         time = self.loop.time() * self.rainbowRate
@@ -65,18 +69,21 @@ class MidiFighterAnimator(object):
                 color = self._colorFromTime(time + i*self.rainbowPhase)
                 self.setKnobColor(knob, color)
 
+
     def _randomColor(self):
         for i in range(16):
             self.setKnobColor(i, random.randint(1, 125))
 
+
     def _colorFromTime(self, time):
         return int(time % 125) + 1
 
+
     def _send(self, message):
-        if self.port is not None and not self.port.closed:
+        if self.port is not None and not self.port.closed and self.shouldRun:
             try:
                 self.port.send(message)
             except Exception:
                 traceback.print_exc()
                 print('Encountered exception whilst animating knobs; animation halted until device is reconnected')
-                self.port.close()
+                self.shouldRun = False
