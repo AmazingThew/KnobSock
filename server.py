@@ -100,7 +100,7 @@ class MidiServer(object):
         for (i, (cleanName, inputName, outputName)) in enumerate(deviceNames):
             index = i - skipped
             if cleanName not in self.deviceInfo.keys():
-                print("No configuration found for {}; skipping...".format(cleanName))
+                print('No configuration found for {}; skipping...'.format(cleanName))
                 skipped += 1
                 continue
 
@@ -123,7 +123,7 @@ class MidiServer(object):
 
             self.knobOffsets.append(len(self.deviceInfo[cleanName]['knobMap']))
             runningOffset += self.deviceInfo[cleanName]['numKnobs']
-            print("Connected to " + cleanName)
+            print('Connected to ' + cleanName)
 
 
     def getDeviceNames(self):
@@ -183,9 +183,9 @@ class MidiServer(object):
             args = [iter(iterable)] * chunkSize
             return zip_longest(*args, fillvalue=fillvalue)
 
-        knobStrings = ["{}:\t{:10.8f}".format(i, float(b) / 127.0) for i, b in enumerate(self.knobs)]
         columnHeight = 16
-        columns = chunks(knobStrings, columnHeight, "")
+        knobStrings = ['{}{:10.8f}'.format('{}:'.format(i).ljust(4), float(b) / 127.0) for i, b in enumerate(self.knobs)]
+        columns = chunks(knobStrings, columnHeight, '')
         rows = zip(*columns)
         print('\n'.join('\t'.join(row) for row in rows) + '\n')
         # print('\n'.join(knobStrings) + '\n')
