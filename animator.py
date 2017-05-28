@@ -67,7 +67,7 @@ class MidiFighterAnimator(object):
 
     def _rainbow(self):
         time = self.loop.time() * self.rainbowRate
-        for i, row in enumerate(reversed(self.randomRows)):
+        for i, row in enumerate(reversed(self.verticalRows)):
             for knob in row:
                 color = self._colorFromTime(time + i*self.rainbowPhase)
                 self.setKnobColor(knob, color)
