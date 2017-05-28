@@ -12,7 +12,7 @@ public class Knobs
     private static Thread worker;
     private static bool running = false;
 
-    public static void start(int numKnobs)
+    public static void Start(int numKnobs)
     {
         if (!running)
         {
@@ -36,7 +36,7 @@ public class Knobs
         }
     }
 
-    public static void stop()
+    public static void Stop()
     {
         if (running)
         {
@@ -46,24 +46,24 @@ public class Knobs
         }
     }
 
-    public static float get(int index)
+    public static float Get(int index)
     {
         return get(index, 0, 1);
     }
 
-    public static float get(int index, float max)
+    public static float Get(int index, float max)
     {
         return get(index, 0, max);
     }
 
-    public static float get(int index, float min, float max)
+    public static float Get(int index, float min, float max)
     {
         float value = (float) knobs[index] / 127.0f;
         return (1 - value) * min + value * max;
     }
 
 
-    private static void readFromServer()
+    private static void ReadFromServer()
     {
         byte[] sockBuffer = new byte[size];
 
