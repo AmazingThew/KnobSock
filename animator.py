@@ -34,6 +34,7 @@ class MidiFighterAnimator(object):
     def __init__(self, eventLoop):
         self.loop = eventLoop
         self.progress = 0
+        self.colorMap = self._generateColorMap()
         self.loop.create_task(self.animate())
 
 
@@ -76,7 +77,7 @@ class MidiFighterAnimator(object):
 
 
     def _colorFromTime(self, time):
-        return int(time % 125) + 1
+        return self.colorMap[int(time % 125) + 1]
 
 
     def _send(self, message):
@@ -87,3 +88,23 @@ class MidiFighterAnimator(object):
                 traceback.print_exc()
                 print('Encountered exception whilst animating knobs; animation halted until device is reconnected')
                 self.shouldRun = False
+
+
+    # Generate a lookup table that remaps the Twister's color indices to shorten the amount of the rainbow that is dedicated to blue
+    # This is an entirely subjective tweak to account for the fact that blue feels overrepresented in the Twister's LED rainbow
+    def _generateColorMap(self):
+        blueExtent = 12
+        blueCompression = 2.5
+
+        def remap(oldMin, oldMax, newMin, newMax, value):
+            return (((value - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin
+
+        colorMap = [None]
+        for i in range(1, 126):
+            if 0 < i < blueExtent:
+                color = int(remap(1, blueExtent, 1, blueExtent * blueCompression, i))
+            else:
+                color = int(remap(blueExtent, 125, blueExtent * blueCompression, 125, i))
+            colorMap.append(color)
+
+        return colorMap
