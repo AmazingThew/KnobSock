@@ -154,6 +154,7 @@ class MidiServer(object):
 
     def register(self, connection):
         self.clientConnections.append(connection)
+        self.push()
 
 
     def unregister(self, connection):
@@ -188,7 +189,6 @@ class MidiServer(object):
         columns = chunks(knobStrings, columnHeight, '')
         rows = zip(*columns)
         print('\n'.join('\t'.join(row) for row in rows) + '\n')
-        # print('\n'.join(knobStrings) + '\n')
 
 
     def saveKnobs(self):
