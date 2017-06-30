@@ -168,8 +168,11 @@ class MidiServer(object):
 
     def onMessage(self, controllerNumber, message):
         if message.type == 'control_change':
-            self.knobs[self.knobMap[self.knobOffsets[controllerNumber] + message.control]] = message.value
-            self.push()
+            index = self.knobMap[self.knobOffsets[controllerNumber] + message.control]
+            channel = self.knobInfo[index][3]
+            if message.channel == channel:
+                self.knobs[index] = message.value
+                self.push()
         elif message.type == 'note_on':
             self.onButton()
 
