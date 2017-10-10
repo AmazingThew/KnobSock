@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 import mido
+import mido.backends.rtmidi
 import pickle
 import hashlib
 from itertools import zip_longest
