@@ -1,10 +1,13 @@
 import asyncio
 import os
 import sys
+
+import functools
 import mido
 import mido.backends.rtmidi
 import pickle
 import hashlib
+import websockets
 from itertools import zip_longest
 from animator import MidiFighterAnimator
 
@@ -53,23 +56,27 @@ class MidiServer(object):
 
         mido.set_backend('mido.backends.rtmidi')
 
-        loop = asyncio.get_event_loop()
-        factory = loop.create_server(lambda: MidiProtocol(self), hostname, port)
-        server = loop.run_until_complete(factory)
-        print('Starting server on port {}'.format(port))
+        self.loop = asyncio.get_event_loop()
+        # factory = loop.create_server(lambda: MidiProtocol(self), hostname, port)
+        # server = loop.run_until_complete(factory)
+        # print('Starting server on port {}'.format(port))
 
-        self.animator = MidiFighterAnimator(loop)
+        startWebSock = websockets.serve(self.websocketHandler, 'localhost', 8765)
+        self.loop.run_until_complete(startWebSock)
+        print('Starting websocket server on port 8765')
 
-        loop.call_soon(self.awaitDevices, loop)
+        self.animator = MidiFighterAnimator(self.loop)
+
+        self.loop.call_soon(self.awaitDevices, self.loop)
 
         try:
-            loop.run_forever()
+            self.loop.run_forever()
         finally:
             print('Shutting down server')
             server.close()
-            loop.run_until_complete(server.wait_closed())
+            self.loop.run_until_complete(server.wait_closed())
             print('Closing event loop')
-            loop.close()
+            self.loop.close()
 
 
     def awaitDevices(self, loop):
@@ -164,7 +171,8 @@ class MidiServer(object):
 
 
     def push(self):
-        [client.push(self.knobs) for client in self.clientConnections]
+        knobBytes = bytes(self.knobs)
+        [client.push(knobBytes) for client in self.clientConnections]
 
 
     def onMessage(self, controllerNumber, message):
@@ -205,6 +213,73 @@ class MidiServer(object):
             print(e, file=sys.stderr)
             print('\n\nFailed to persist knob state to disk', file=sys.stderr)
 
+
+    async def websocketHandler(self, handler, path):
+        connection = WebSocketConnection(handler, self.loop)
+        self.register(connection)
+        try:
+            while True:
+                msg = await handler.recv()
+                print("RECEIVED: {}".format(msg))
+                await handler.send("poops")
+        finally:
+            print("WEBSOCK: DISCONNECTED, DEREGISTERING")
+            self.unregister(connection)
+
+        # print("< {}".format(name))
+        #
+        # greeting = "Hello {}!".format(name)
+        # await websocket.send(greeting)
+        # print("> {}".format(greeting))
+
+class WebSocketConnection(object):
+    def __init__(self, handler, loop):
+        self.loop = loop
+        self.handler = handler
+
+    def push(self, data):
+        print("PUSHING")
+        print(type(data))
+        print(data)
+        self.loop.create_task(self.handler.send(str(data)))
+        # self.loop.call_soon(self.asyncPush(data))
+
+    # async def asyncPush(self, data):
+    #     await self.handler.send("farts")
+
+# class WebSocketMidiProtocol(websockets.WebSocketServerProtocol):
+#     # def __init__(self, midi, ws_handler, ws_server, **kwds):
+#     def __init__(self, ws_handler, ws_server, **kwds):
+#         print("WEBSOCK MIDI:")
+#         # print(midi)
+#         # self.midi = midi
+#         super(WebSocketMidiProtocol, self).__init__(ws_handler, ws_server, **kwds)
+#
+#     def push(self, data):
+#         self.transport.write(data)
+#
+#     def connection_made(self, transport):
+#         self.transport = transport
+#         self.address = transport.get_extra_info('peername')
+#         print('WEBSOCK: Connection accepted from {}'.format(self.address))
+#         # self.transport.set_write_buffer_limits(self.midi.totalKnobs, self.midi.totalKnobs)
+#         # self.midi.register(self)
+#         super(WebSocketMidiProtocol, self).connection_made(transport)
+#
+#     # def data_received(self, data):
+#     #     print('WEBSOCK: recieved from {}: {}'.format(self.address, data))
+#     #     super(WebSocketMidiProtocol, self).data_received(data)
+#
+#     def connection_lost(self, error):
+#         if error:
+#             if error.errno == 10054:
+#                 print('WEBSOCK: Connection to {} force-closed by client'.format(self.address))
+#             else:
+#                 print('WEBSOCK: Error from {}: {}'.format(self.address, error))
+#         else:
+#             print('WEBSOCK: Closing connection to {}'.format(self.address))
+#         # self.midi.unregister(self)
+#         super(WebSocketMidiProtocol, self).connection_lost(error)
 
 
 class MidiProtocol(asyncio.Protocol):
