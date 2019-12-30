@@ -193,6 +193,7 @@ class MidiServer(object):
         columns = chunks(knobStrings, columnHeight, '')
         rows = zip(*columns)
         print('\n'.join('\t'.join(row) for row in rows) + '\n')
+        print("{} clients connected\n".format(len(self.clientConnections)))
 
 
     def saveKnobs(self):
