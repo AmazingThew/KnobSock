@@ -17,15 +17,11 @@ Most design decisions have been made in pursuit of this goal of keeping project-
 
 
 # INSTALLATION
-* Install Python. I have only tested on 3.5 under Windows.
-* Run `pip install mido`
-* Run `pip install python-rtmidi`
-* Download the project files bc you'll probably need those I guess
-* Plug in one or more MIDI controllers with some knobs (tested: Akai LPD8 and Korg nanoKONTROL2)
-* Run configurator.py. It will ask you to fondle all your knobs so the server can identify them
-* Run server.py
-* Open Clients/Python/debugClient.py and change NUM_KNOBS to the total number of knobs you configured
-* Run debugClient.py. It should print values to the console when the knobs are moved.
+* For Windows, just grab the binaries from [the Releases tab](https://github.com/AmazingThew/KnobSock/releases)
+* For other platforms, you should be able to run the Python scripts directly, but I have not tested this
+* Plug in one or more MIDI controllers with some knobs/faders
+* Run configurator.exe. It will ask you to fondle all your knobs so the server can identify them
+* Run server.exe
 
 
 # MONITOR
@@ -36,7 +32,8 @@ Once the server's working, I recommend Using [Knob Monitor](https://github.com/A
 ## General
 * Every client has a NUM_KNOBS constant. You need to set this value to the number of knobs you fondled in the configurator. The clients need to know how much data to expect from the server, so if you set the wrong value you won't get errors but you'll get weird behavior like knobs overwriting each others' values.
 * Default port is 8008. If you need to change that just edit the code like a normal person; config files are for nerds.
-* MIDI only sends data when a value changes. This means when the server starts it has no way of knowing the knobs' positions until you change them. It works around this by writing all the knob values to disk and loading them on startup. Just don't move the knobs while the server is off and it'll always be correct (values are written to disk every time a client disconnects)
+* MIDI only sends data when a value changes. This means when the server starts it has no way of knowing the knobs' positions until you change them. It works around this by writing all the knob values to disk and loading them on startup. Just don't move the knobs while the server is off and it'll always be correct (values are written to disk every time a client disconnects).
+* If your controller uses motorized faders or free-spinning encoders, the above does not apply: the server can restore the old values on reconnect even if you've moved the knobs (I have only tested this extensively on a Midi Fighter Twister).
 
 ## C# Client
 Everything's static; just import the class anywhere you want access to knobs. Call `Knobs.Start()` to initialize and then use the `Get()` functions to retrieve values. `Stop()` disconnects from the server and shuts down the client thread.
