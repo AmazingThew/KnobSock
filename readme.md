@@ -28,6 +28,10 @@ Most design decisions have been made in pursuit of this goal of keeping project-
 * Run debugClient.py. It should print values to the console when the knobs are moved.
 
 
+# MONITOR
+Once the server's working, I recommend Using [Knob Monitor](https://github.com/AmazingThew/KnobMonitor) to keep abreast of the knob situation
+
+
 # USAGE NOTES
 ## General
 * Every client has a NUM_KNOBS constant. You need to set this value to the number of knobs you fondled in the configurator. The clients need to know how much data to expect from the server, so if you set the wrong value you won't get errors but you'll get weird behavior like knobs overwriting each others' values.
